@@ -255,23 +255,69 @@
 
   /* GALLERY */
   #gallery { background: var(--white); }
-  .gallery-note {
-    background: linear-gradient(135deg, var(--purple-pale), var(--pink-pale));
-    border-radius: 16px; padding: 2.5rem; text-align: center; margin-top: 3rem;
+  .gallery-upload-area {
+    border: 2.5px dashed var(--purple-light); border-radius: 16px;
+    padding: 3rem 2rem; text-align: center; margin-top: 2rem;
+    cursor: pointer; transition: all .2s;
+    background: var(--purple-ghost);
   }
-  .gallery-note p { color: var(--text-mid); margin-bottom: 1.5rem; font-size: 1rem; line-height: 1.8; }
-  .gallery-thumb-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-    gap: 1rem; margin-top: 2rem;
+  .gallery-upload-area:hover, .gallery-upload-area.drag-over {
+    border-color: var(--purple-mid); background: var(--purple-pale);
+    transform: scale(1.01);
   }
-  .gallery-placeholder {
-    aspect-ratio: 1; border-radius: 12px;
-    background: linear-gradient(135deg, var(--purple-pale) 0%, var(--pink-pale) 100%);
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    font-size: 1.8rem; color: var(--purple-light);
-    border: 1.5px dashed var(--purple-pale);
+  .upload-icon { font-size: 2.5rem; margin-bottom: 0.75rem; }
+  .upload-title { font-family: 'Dancing Script', cursive; color: var(--purple-dark); font-size: 1.4rem; margin-bottom: 0.4rem; }
+  .upload-sub { color: var(--text-light); font-size: 0.85rem; }
+  .gallery-filters { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1.5rem 0 1rem; }
+  .filter-btn {
+    background: var(--purple-pale); color: var(--purple-mid);
+    border: none; font-family: 'Nunito', sans-serif; font-weight: 700;
+    font-size: 0.8rem; letter-spacing: .06em; text-transform: uppercase;
+    padding: 0.5rem 1.25rem; border-radius: 20px; cursor: pointer; transition: all .2s;
   }
-  .gallery-placeholder span { font-size: 0.7rem; color: var(--text-light); margin-top: 6px; font-weight: 600; }
+  .filter-btn.active, .filter-btn:hover { background: var(--purple-mid); color: #fff; }
+  .gallery-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1rem; margin-top: 1rem;
+  }
+  .gallery-item {
+    position: relative; border-radius: 12px; overflow: hidden;
+    aspect-ratio: 1; cursor: pointer; background: var(--purple-pale);
+    transition: transform .2s;
+  }
+  .gallery-item:hover { transform: scale(1.03); }
+  .gallery-item img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery-item-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: linear-gradient(transparent, rgba(74,32,128,0.85));
+    padding: 0.75rem; opacity: 0; transition: opacity .2s;
+    display: flex; justify-content: space-between; align-items: flex-end;
+  }
+  .gallery-item:hover .gallery-item-overlay { opacity: 1; }
+  .gallery-item-label { color: #fff; font-size: 0.8rem; font-weight: 600; }
+  .gallery-item-delete {
+    background: rgba(255,255,255,0.2); border: none; color: #fff;
+    width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+    font-size: 0.9rem; display: flex; align-items: center; justify-content: center;
+  }
+  .gallery-item-delete:hover { background: rgba(255,50,50,0.7); }
+  .gallery-empty { text-align: center; color: var(--text-light); font-size: 1rem; margin-top: 2rem; font-style: italic; }
+  .lightbox {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.92);
+    z-index: 9999; align-items: center; justify-content: center; cursor: pointer;
+  }
+  .lightbox.open { display: flex; }
+  .lightbox img { max-width: 90vw; max-height: 90vh; border-radius: 12px; object-fit: contain; }
+  .lightbox-close {
+    position: absolute; top: 1.5rem; right: 2rem;
+    color: #fff; font-size: 2rem; cursor: pointer; font-weight: 300;
+  }
+  .gallery-item-select {
+    position: absolute; top: 8px; right: 8px;
+    background: var(--purple-pale); color: var(--purple-mid);
+    border: none; font-family: 'Nunito', sans-serif; font-size: 0.65rem; font-weight: 700;
+    padding: 3px 8px; border-radius: 10px; cursor: pointer; text-transform: uppercase;
+  }
 
   /* BOOKING */
   #booking { background: linear-gradient(135deg, #3A1070 0%, #6B3FA0 60%, #B03880 100%); }
@@ -618,21 +664,36 @@
     <div class="section-tag">Sweet Creations</div>
     <h2 class="section-title">Our Gallery</h2>
     <div class="section-line"></div>
-    <p class="section-desc">A taste of what we create — every item made fresh, from scratch, with love.</p>
-    <div class="gallery-note">
-      <p>📸 Browse our full photo gallery on Google Photos to see all of our beautiful creations — cakes, cupcakes, cookies, pies, and more!</p>
-      <a href="https://photos.app.goo.gl/PDKcXb9pFpdVHvLR8" target="_blank" class="btn-primary">View Full Gallery</a>
+    <p class="section-desc">A taste of what we create — every item made fresh, from scratch, with love. Upload your photos below!</p>
+
+    <!-- Upload area -->
+    <div class="gallery-upload-area" id="uploadArea" onclick="document.getElementById('galleryInput').click()" ondragover="event.preventDefault();this.classList.add('drag-over')" ondragleave="this.classList.remove('drag-over')" ondrop="handleDrop(event)">
+      <div class="upload-icon">📷</div>
+      <p class="upload-title">Click or drag photos here to add to gallery</p>
+      <p class="upload-sub">JPG, PNG — you can upload multiple at once</p>
+      <input type="file" id="galleryInput" accept="image/*" multiple style="display:none" onchange="handleFiles(this.files)">
     </div>
-    <div class="gallery-thumb-grid">
-      <div class="gallery-placeholder">🎂<span>Custom Cakes</span></div>
-      <div class="gallery-placeholder">🧁<span>Cupcakes</span></div>
-      <div class="gallery-placeholder">🥧<span>Pies</span></div>
-      <div class="gallery-placeholder">🍪<span>Cookies</span></div>
-      <div class="gallery-placeholder">🍰<span>Cheesecakes</span></div>
-      <div class="gallery-placeholder">🎁<span>Sweet Boxes</span></div>
-      <div class="gallery-placeholder">🍞<span>Breads</span></div>
-      <div class="gallery-placeholder">🏈<span>Themed Cakes</span></div>
+
+    <!-- Filter buttons -->
+    <div class="gallery-filters" id="galleryFilters" style="display:none">
+      <button class="filter-btn active" onclick="filterGallery('all', this)">All</button>
+      <button class="filter-btn" onclick="filterGallery('cakes', this)">Cakes</button>
+      <button class="filter-btn" onclick="filterGallery('cupcakes', this)">Cupcakes</button>
+      <button class="filter-btn" onclick="filterGallery('cookies', this)">Cookies</button>
+      <button class="filter-btn" onclick="filterGallery('pies', this)">Pies</button>
+      <button class="filter-btn" onclick="filterGallery('other', this)">Other</button>
     </div>
+
+    <!-- Gallery grid -->
+    <div class="gallery-grid" id="galleryGrid"></div>
+
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+      <span class="lightbox-close">✕</span>
+      <img id="lightboxImg" src="" alt="">
+    </div>
+
+    <p class="gallery-empty" id="galleryEmpty">No photos yet — upload your first sweet creation above! 🎂</p>
   </div>
 </section>
 
@@ -741,6 +802,105 @@ function showTab(tab) {
   document.getElementById('tab-' + tab).classList.add('active');
   event.target.classList.add('active');
 }
+
+// ── Gallery ──────────────────────────────────────────
+let galleryImages = JSON.parse(localStorage.getItem('missC_gallery') || '[]');
+let currentFilter = 'all';
+
+function saveGallery() {
+  try { localStorage.setItem('missC_gallery', JSON.stringify(galleryImages)); } catch(e) {}
+}
+
+function renderGallery() {
+  const grid = document.getElementById('galleryGrid');
+  const empty = document.getElementById('galleryEmpty');
+  const filters = document.getElementById('galleryFilters');
+  const filtered = currentFilter === 'all' ? galleryImages : galleryImages.filter(i => i.cat === currentFilter);
+  grid.innerHTML = '';
+  if (galleryImages.length > 0) {
+    filters.style.display = 'flex';
+    empty.style.display = filtered.length ? 'none' : 'block';
+    empty.textContent = filtered.length ? '' : 'No photos in this category yet.';
+  } else {
+    filters.style.display = 'none';
+    empty.style.display = 'block';
+    empty.textContent = 'No photos yet — upload your first sweet creation above! 🎂';
+  }
+  filtered.forEach((img, idx) => {
+    const realIdx = galleryImages.indexOf(img);
+    const div = document.createElement('div');
+    div.className = 'gallery-item';
+    div.innerHTML = `
+      <img src="${img.src}" alt="${img.name}" loading="lazy">
+      <select class="gallery-item-select" onchange="changeCategory(${realIdx}, this.value)" onclick="event.stopPropagation()">
+        <option value="other" ${img.cat==='other'?'selected':''}>Other</option>
+        <option value="cakes" ${img.cat==='cakes'?'selected':''}>Cakes</option>
+        <option value="cupcakes" ${img.cat==='cupcakes'?'selected':''}>Cupcakes</option>
+        <option value="cookies" ${img.cat==='cookies'?'selected':''}>Cookies</option>
+        <option value="pies" ${img.cat==='pies'?'selected':''}>Pies</option>
+      </select>
+      <div class="gallery-item-overlay">
+        <span class="gallery-item-label">${img.name}</span>
+        <button class="gallery-item-delete" onclick="deleteImage(${realIdx}, event)" title="Remove">✕</button>
+      </div>`;
+    div.addEventListener('click', () => openLightbox(img.src));
+    grid.appendChild(div);
+  });
+}
+
+function handleFiles(files) {
+  Array.from(files).forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      galleryImages.push({ src: e.target.result, name: file.name.replace(/\.[^.]+$/,''), cat: 'other' });
+      saveGallery();
+      renderGallery();
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('uploadArea').classList.remove('drag-over');
+  handleFiles(e.dataTransfer.files);
+}
+
+function deleteImage(idx, e) {
+  e.stopPropagation();
+  if (confirm('Remove this photo from the gallery?')) {
+    galleryImages.splice(idx, 1);
+    saveGallery();
+    renderGallery();
+  }
+}
+
+function changeCategory(idx, cat) {
+  galleryImages[idx].cat = cat;
+  saveGallery();
+  renderGallery();
+}
+
+function filterGallery(cat, btn) {
+  currentFilter = cat;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderGallery();
+}
+
+function openLightbox(src) {
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeLightbox(); });
+
+renderGallery();
+
 function handleSubmit(e) {
   e.preventDefault();
   const btn = e.target.querySelector('.btn-submit');
