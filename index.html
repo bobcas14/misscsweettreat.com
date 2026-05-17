@@ -1221,11 +1221,12 @@ function renderAdminGallery() {
     div.className = 'admin-gallery-item';
     div.draggable = true;
     div.dataset.idx = i;
+    const displayVal = img.display_name || img.name || '';
     div.innerHTML = `
       <div class="admin-gallery-drag-handle">⠿ Drag to reorder</div>
-      <img src="${img.src}" alt="${img.name}">
+      <img src="${img.src}" alt="${displayVal}">
       <div class="admin-gallery-item-bottom">
-        <input type="text" class="admin-gallery-name-input" value="${img.display_name || img.name}" 
+        <input type="text" class="admin-gallery-name-input" value="${displayVal}" 
           onchange="adminUpdateName(${i},this.value)" placeholder="Caption/description">
         <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
           <select onchange="adminGalleryCatSelect(${i},this.value)" style="flex:1;padding:4px 6px;border-radius:6px;border:1px solid #ddd;font-size:0.78rem">
@@ -1235,7 +1236,7 @@ function renderAdminGallery() {
             <option value="cookies" ${img.cat==='cookies'?'selected':''}>Cookies</option>
             <option value="pies" ${img.cat==='pies'?'selected':''}>Pies</option>
           </select>
-          <button class="del" onclick="adminDeletePhoto(${i})" style="background:#ff4444;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem">🗑 Delete</button>
+          <button onclick="adminDeletePhoto(${i})" style="background:#ff4444;color:#fff;border:none;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:0.78rem">🗑 Delete</button>
         </div>
       </div>`;
     div.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', i); div.style.opacity='0.4'; });
