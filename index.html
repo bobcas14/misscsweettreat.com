@@ -1802,15 +1802,35 @@ function clearInactivityTimer() {
   );
 }
 
+// Track which tabs have already loaded their data
+const adminTabsLoaded = {};
+
 function switchAdminTab(tab, btn) {
   document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.admin-tab').forEach(b => b.classList.remove('active'));
   document.getElementById('panel-' + tab).classList.add('active');
   btn.classList.add('active');
+
+  // Only load data the FIRST time each tab is opened
+  if (!adminTabsLoaded[tab]) {
+    adminTabsLoaded[tab] = true;
+    switch(tab) {
+      case 'gallery':  adminLoadGallery(); break;
+      case 'prices':   mmLoad(); break;
+      case 'orders':   loadOrders(); break;
+      case 'email':    loadEmailList(); break;
+      case 'settings': loadSocialLinks(); break;
+    }
+  }
 }
 
-
-// ── GALLERY ──
+function loadAdminData() {
+  // Only load gallery (first tab) immediately — rest load on demand
+  adminLoadGallery();
+  adminTabsLoaded['gallery'] = true;
+  // Load menu manager in background silently
+  mmLoad().then(() => { adminTabsLoaded['prices'] = true; });
+}
 let adminGallery = [];
 
 async function adminLoadGallery() {
@@ -1993,6 +2013,9 @@ let mmHolidayFilter = null;
 
 // ── Load / Save via Supabase settings table ──────────
 async function mmLoad() {
+  const wrap = document.getElementById('mmItemsList');
+  if (wrap && !wrap.innerHTML) wrap.innerHTML = '<p style="color:var(--text-light);text-align:center;padding:2rem">⏳ Loading menu...</p>';
+
   const { data } = await sb.from('settings').select('*').in('key',['mm_categories','mm_items','mm_season']);
   const catRow   = data?.find(r => r.key === 'mm_categories');
   const itemRow  = data?.find(r => r.key === 'mm_items');
@@ -2236,14 +2259,42 @@ function toggleItemHoliday(itemId, holidayKey) {
   } else {
     item.holidays.push(holidayKey);
   }
-
-  // Update just this chip instantly — no full re-render
+  // Just toggle the chip visually — no save yet
   const chip = document.querySelector(`#mmrow_${itemId} .mm-holiday-chip[data-hkey="${holidayKey}"]`);
   if (chip) chip.classList.toggle('on', item.holidays.includes(holidayKey));
+  // Show the save bar
+  showItemSaveBar(itemId);
+}
 
-  // Debounce the save so rapid clicks don't hammer Supabase
-  clearTimeout(toggleItemHoliday._timer);
-  toggleItemHoliday._timer = setTimeout(() => mmSaveItems(), 800);
+function showItemSaveBar(itemId) {
+  // Add a save button row under this item if not already there
+  const row = document.getElementById('mmrow_' + itemId);
+  if (!row) return;
+  let bar = row.querySelector('.mm-save-bar');
+  if (bar) return; // already showing
+  bar = document.createElement('div');
+  bar.className = 'mm-save-bar';
+  bar.style.cssText = 'display:flex;gap:0.5rem;margin-top:0.5rem;align-items:center';
+  bar.innerHTML = `
+    <span style="font-size:0.75rem;color:var(--pink-dark);font-weight:700">⚠️ Unsaved changes</span>
+    <button onclick="saveItemHolidays('${itemId}')" style="background:var(--purple-mid);color:#fff;border:none;padding:0.3rem 1rem;border-radius:20px;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.75rem;cursor:pointer">Save ✓</button>
+    <button onclick="cancelItemHolidays('${itemId}')" style="background:var(--purple-pale);color:var(--purple-dark);border:none;padding:0.3rem 0.75rem;border-radius:20px;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.75rem;cursor:pointer">Cancel</button>
+  `;
+  // Append inside the item body
+  row.querySelector('.mm-item-body').appendChild(bar);
+}
+
+async function saveItemHolidays(itemId) {
+  const row = document.getElementById('mmrow_' + itemId);
+  const bar = row?.querySelector('.mm-save-bar');
+  if (bar) bar.innerHTML = '<span style="font-size:0.75rem;color:var(--purple-mid);font-weight:700">💾 Saving...</span>';
+  await mmSaveItems();
+  if (bar) bar.remove();
+}
+
+function cancelItemHolidays(itemId) {
+  // Re-render just this item to reset chips to saved state
+  mmRenderItemsList();
 }
 
 function deleteMenuItem(id) {
@@ -2682,11 +2733,11 @@ function saveBizInfo() {
 }
 
 function loadAdminData() {
+  // Load gallery immediately (first visible tab)
   adminLoadGallery();
-  mmLoad();
-  loadOrders();
-  loadEmailList();
-  loadSocialLinks();
+  adminTabsLoaded['gallery'] = true;
+  // Load menu manager silently in background
+  mmLoad().then(() => { adminTabsLoaded['prices'] = true; });
 }
 
 // ── SAVE ORDERS FROM BOOKING FORM ──
