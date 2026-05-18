@@ -2148,6 +2148,7 @@ function mmRenderItemsList() {
       : `<span>${fallbackEmoji}</span>`;
     const holidayChips = HOLIDAYS.map(h => `
       <span class="mm-holiday-chip ${item.holidays&&item.holidays.includes(h.key)?'on':''}"
+        data-hkey="${h.key}"
         onclick="toggleItemHoliday('${item.id}','${h.key}')">${h.emoji} ${h.label}</span>`).join('');
     return `
     <div class="mm-item-row" id="mmrow_${item.id}">
@@ -2235,15 +2236,14 @@ function toggleItemHoliday(itemId, holidayKey) {
   } else {
     item.holidays.push(holidayKey);
   }
-  mmSaveItems();
-  // Re-render just the chips for this item
-  const row = document.getElementById('mmrow_' + itemId);
-  if (row) {
-    const chipsWrap = row.querySelector('.mm-item-holidays');
-    chipsWrap.innerHTML = HOLIDAYS.map(h => `
-      <span class="mm-holiday-chip ${item.holidays.includes(h.key)?'on':''}"
-        onclick="toggleItemHoliday('${itemId}','${h.key}')">${h.emoji} ${h.label}</span>`).join('');
-  }
+
+  // Update just this chip instantly — no full re-render
+  const chip = document.querySelector(`#mmrow_${itemId} .mm-holiday-chip[data-hkey="${holidayKey}"]`);
+  if (chip) chip.classList.toggle('on', item.holidays.includes(holidayKey));
+
+  // Debounce the save so rapid clicks don't hammer Supabase
+  clearTimeout(toggleItemHoliday._timer);
+  toggleItemHoliday._timer = setTimeout(() => mmSaveItems(), 800);
 }
 
 function deleteMenuItem(id) {
