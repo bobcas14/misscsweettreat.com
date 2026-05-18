@@ -447,6 +447,29 @@
   }
   .order-custom-btn:hover { background: var(--pink-light); }
 
+  /* Size picker modal */
+  .order-size-modal {
+    display: none; position: fixed; inset: 0; z-index: 4000;
+    background: rgba(26,8,48,0.8); align-items: center; justify-content: center; padding: 1rem;
+  }
+  .order-size-modal.open { display: flex; }
+  .order-size-box {
+    background: #fff; border-radius: 20px; padding: 2rem;
+    width: 100%; max-width: 380px;
+    box-shadow: 0 16px 60px rgba(26,8,48,0.4);
+  }
+  .order-size-box h3 { font-family: 'Dancing Script', cursive; color: var(--purple-dark); font-size: 1.6rem; margin-bottom: 0.25rem; }
+  .order-size-box p { color: var(--text-light); font-size: 0.85rem; margin-bottom: 1.25rem; }
+  .size-option {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--purple-ghost); border: 2px solid var(--purple-pale);
+    border-radius: 12px; padding: 0.85rem 1rem; margin-bottom: 0.6rem;
+    cursor: pointer; transition: all 0.2s;
+  }
+  .size-option:hover { border-color: var(--purple-mid); background: var(--purple-pale); }
+  .size-option-label { font-weight: 700; color: var(--text-dark); font-size: 0.9rem; }
+  .size-option-price { font-weight: 800; color: var(--purple-mid); font-size: 1rem; }
+
   /* Qty picker */
   .order-qty-modal {
     display: none; position: fixed; inset: 0; z-index: 4000;
@@ -565,16 +588,17 @@
   }
   .order-pay-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(107,63,160,0.45); }
 
-  /* Cart bubble on nav */
+  /* Cart bubble — bottom right, sits left of the gear button */
   #cartBubble {
-    position: fixed; top: 14px; right: 70px; z-index: 1100;
+    position: fixed; bottom: 24px; right: 84px; z-index: 800;
     background: var(--pink-mid); color: #fff;
-    border: none; border-radius: 30px; padding: 0.4rem 1rem;
-    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.8rem;
+    border: none; border-radius: 30px; padding: 0 1.1rem;
+    height: 48px;
+    font-family: 'Nunito', sans-serif; font-weight: 800; font-size: 0.82rem;
     cursor: pointer; display: none; align-items: center; gap: 6px;
-    box-shadow: 0 4px 16px rgba(176,56,128,0.4); transition: all 0.2s;
+    box-shadow: 0 4px 20px rgba(176,56,128,0.45); transition: all 0.2s;
   }
-  #cartBubble:hover { background: var(--pink-dark); }
+  #cartBubble:hover { background: var(--pink-dark); transform: scale(1.06); }
   #cartBubble.visible { display: flex; }
 
   /* Order Now button on menu items */
@@ -1823,24 +1847,24 @@ async function handleSubmit(e) {
 
 const ORDER_CATALOG = {
   cakes: [
-    { name: 'Pound Cake', price: '$38', num: 38, detail: 'Cream cheese, lemon, or chocolate · Serves 8–10' },
-    { name: 'Red Velvet', price: '$40', num: 40, detail: 'Classic cream cheese frosting · Serves 10–12' },
-    { name: 'German Chocolate', price: '$45', num: 45, detail: 'Coconut pecan frosting · Serves 10–12' },
-    { name: 'Hummingbird', price: '$45', num: 45, detail: 'Banana, pineapple & pecans · Serves 10–12' },
-    { name: 'Carrot Cake', price: '$42', num: 42, detail: 'With cream cheese frosting · Serves 10–12' },
-    { name: 'Coconut Cake', price: '$42', num: 42, detail: 'Serves 10–12' },
-    { name: 'Strawberry Cake', price: '$42', num: 42, detail: 'Serves 10–12' },
+    { name: 'Pound Cake', price: '$20/qtr · $38/full', num: 0, detail: 'Cream cheese, lemon, or chocolate', sizes: [{label:'Quarter Cake',price:'$20',num:20},{label:'Full Cake',price:'$38',num:38}] },
+    { name: 'Red Velvet', price: '$22/qtr · $40/full', num: 0, detail: 'Classic cream cheese frosting', sizes: [{label:'Quarter Cake',price:'$22',num:22},{label:'Full Cake',price:'$40',num:40}] },
+    { name: 'German Chocolate', price: '$24/qtr · $45/full', num: 0, detail: 'Coconut pecan frosting', sizes: [{label:'Quarter Cake',price:'$24',num:24},{label:'Full Cake',price:'$45',num:45}] },
+    { name: 'Hummingbird', price: '$24/qtr · $45/full', num: 0, detail: 'Banana, pineapple & pecans', sizes: [{label:'Quarter Cake',price:'$24',num:24},{label:'Full Cake',price:'$45',num:45}] },
+    { name: 'Carrot Cake', price: '$22/qtr · $42/full', num: 0, detail: 'With cream cheese frosting', sizes: [{label:'Quarter Cake',price:'$22',num:22},{label:'Full Cake',price:'$42',num:42}] },
+    { name: 'Coconut Cake', price: '$22/qtr · $42/full', num: 0, detail: 'Serves 10–12', sizes: [{label:'Quarter Cake',price:'$22',num:22},{label:'Full Cake',price:'$42',num:42}] },
+    { name: 'Strawberry Cake', price: '$22/qtr · $42/full', num: 0, detail: 'Serves 10–12', sizes: [{label:'Quarter Cake',price:'$22',num:22},{label:'Full Cake',price:'$42',num:42}] },
     { name: 'Custom Themed Cake', price: 'Custom Quote', num: 0, detail: 'Sports, holidays, special events · Serves 10–15', custom: true },
     { name: 'Wedding / Event Cake', price: 'From $150', num: 0, detail: 'Multi-tier · Serves 25–75+', custom: true }
   ],
   cupcakes: [
-    { name: 'Red Velvet Cupcakes', price: '$25/dz', num: 25, detail: 'Cream cheese frosting · per dozen' },
-    { name: 'Strawberry Cupcakes', price: '$25/dz', num: 25, detail: 'Fresh strawberry frosting · per dozen' },
-    { name: 'Peanut Butter Cupcakes', price: '$25/dz', num: 25, detail: 'Rich peanut butter frosting · per dozen' },
-    { name: 'Chocolate Cupcakes', price: '$25/dz', num: 25, detail: 'Chocolate buttercream · per dozen' },
-    { name: 'Mimosa Cupcakes', price: '$25/dz', num: 25, detail: 'Champagne & orange · per dozen' },
+    { name: 'Red Velvet Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Cream cheese frosting', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] },
+    { name: 'Strawberry Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Fresh strawberry frosting', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] },
+    { name: 'Peanut Butter Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Rich peanut butter frosting', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] },
+    { name: 'Chocolate Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Chocolate buttercream', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] },
+    { name: 'Mimosa Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Champagne & orange', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] },
     { name: 'Custom Themed Cupcakes', price: 'Custom Quote', num: 0, detail: 'Fondant toppers, team logos, holiday designs', custom: true },
-    { name: 'Mixed Dozen Cupcakes', price: '$25/dz', num: 25, detail: 'Assorted flavors · per dozen' }
+    { name: 'Mixed Dozen Cupcakes', price: '$13/half dz · $25/dz', num: 0, detail: 'Assorted flavors', sizes: [{label:'Half Dozen (6)',price:'$13',num:13},{label:'Dozen (12)',price:'$25',num:25}] }
   ],
   cookies: [
     { name: 'Cookies (Choc Chip / Oatmeal / Snickerdoodle / Tea Cakes)', price: '$10/dz', num: 10, detail: '8–10 per dozen' },
@@ -1904,6 +1928,8 @@ function openOrderFromMenu(name, price, num, detail, isCustom) {
   setTimeout(() => {
     if (isCustom || item.custom) {
       openCustomModal(item);
+    } else if (item.sizes) {
+      openSizeModal(item);
     } else {
       openQtyModal(item);
     }
@@ -1938,19 +1964,59 @@ function switchOrderCat(cat, btn) {
 function renderOrderItems(cat) {
   const list = document.getElementById('orderItemsList');
   const items = ORDER_CATALOG[cat] || [];
-  list.innerHTML = items.map(item => `
-    <div class="order-item-row" onclick="${item.custom ? `openCustomModal(ORDER_CATALOG['${cat}'][${items.indexOf(item)}])` : `openQtyModal(ORDER_CATALOG['${cat}'][${items.indexOf(item)}])`}">
+  list.innerHTML = items.map((item, idx) => {
+    const action = item.custom
+      ? `openCustomModal(ORDER_CATALOG['${cat}'][${idx}])`
+      : item.sizes
+        ? `openSizeModal(ORDER_CATALOG['${cat}'][${idx}])`
+        : `openQtyModal(ORDER_CATALOG['${cat}'][${idx}])`;
+    const btnLabel = item.custom ? '✏️ Custom' : item.sizes ? '📐 Choose Size' : '+ Add';
+    return `
+    <div class="order-item-row" onclick="${action}">
       <div class="order-item-row-info">
         <div class="order-item-row-name">${item.name}</div>
         <div class="order-item-row-detail">${item.detail}</div>
       </div>
       <div class="order-item-row-price">${item.price}</div>
       <div class="order-item-row-btns">
-        <button class="order-add-btn" onclick="event.stopPropagation();${item.custom ? `openCustomModal(ORDER_CATALOG['${cat}'][${items.indexOf(item)}])` : `openQtyModal(ORDER_CATALOG['${cat}'][${items.indexOf(item)}])`}">
-          ${item.custom ? '✏️ Custom' : '+ Add'}
-        </button>
+        <button class="order-add-btn" onclick="event.stopPropagation();${action}">${btnLabel}</button>
       </div>
+    </div>`;
+  }).join('');
+}
+
+let sizeItem = null;
+
+function openSizeModal(item) {
+  sizeItem = item;
+  document.getElementById('sizeItemName').textContent = item.name;
+  document.getElementById('sizeItemDetail').textContent = item.detail;
+  const list = document.getElementById('sizeOptionsList');
+  list.innerHTML = item.sizes.map((s, i) => `
+    <div class="size-option" onclick="selectSize(${i})">
+      <span class="size-option-label">${s.label}</span>
+      <span class="size-option-price">${s.price}</span>
     </div>`).join('');
+  document.getElementById('orderSizeModal').classList.add('open');
+}
+
+function closeSizeModal() {
+  document.getElementById('orderSizeModal').classList.remove('open');
+  sizeItem = null;
+}
+
+function selectSize(sizeIdx) {
+  if (!sizeItem) return;
+  const size = sizeItem.sizes[sizeIdx];
+  // Build a virtual item with the chosen size baked in
+  const virtualItem = {
+    name: sizeItem.name + ' (' + size.label + ')',
+    price: size.price,
+    num: size.num,
+    detail: sizeItem.detail
+  };
+  closeSizeModal();
+  openQtyModal(virtualItem);
 }
 
 function openQtyModal(item) {
@@ -2374,6 +2440,16 @@ async function signupNewsletter(e) {
       </div>
       <p style="text-align:center;color:var(--text-light);font-size:0.78rem;margin-top:0.75rem">After payment we'll confirm your order details within 24 hours.</p>
     </div>
+  </div>
+</div>
+
+<!-- Size Picker -->
+<div class="order-size-modal" id="orderSizeModal">
+  <div class="order-size-box">
+    <h3 id="sizeItemName">Choose Size</h3>
+    <p id="sizeItemDetail"></p>
+    <div id="sizeOptionsList"></div>
+    <button class="qty-cancel-btn" onclick="closeSizeModal()">Cancel</button>
   </div>
 </div>
 
