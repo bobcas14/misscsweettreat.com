@@ -1721,9 +1721,8 @@ async function adminLogout() {
 // ── Restore session on page load ──────────────────
 async function restoreAdminSession() {
   const { data: { session } } = await sb.auth.getSession();
-  if (session) {
-    showAdminDash();
-  }
+  if (session) { showAdminDash(); }
+  restoreCustSession();
 }
 
 // ── Listen for auth state changes ─────────────────
@@ -2558,31 +2557,27 @@ async function loadOrders() {
   document.getElementById('statNew').textContent = newCount;
   orders.forEach((o, i) => {
     const statusColors = { new: 'status-new', confirmed: 'status-confirmed', complete: 'status-complete', cancelled: 'status-cancelled' };
-    const tr = document.createElement('tr');
-    const amt   = o.grand_total ? parseFloat(o.grand_total).toFixed(2) : '';
-    const note  = encodeURIComponent(`Miss C's Sweet Treats — Invoice #${o.invoice_num||''}`);
-    const ppUrl = `https://www.paypal.com/invoice/create?recipient=${encodeURIComponent(o.email||'')}&amount=${amt}&note=${note}&invoiceNumber=${encodeURIComponent(o.invoice_num||'')}`;
-    const ppBtn = o.pp_invoice_sent
-      ? `<span style="color:#1b5e20;font-weight:700;font-size:0.75rem">✓ PP Sent</span>`
-      : `<button onclick="window.open('${ppUrl}','_blank');markPPSent('${o.id}')" style="background:#0070ba;color:#fff;border:none;padding:3px 9px;border-radius:8px;font-size:0.75rem;cursor:pointer;font-family:'Nunito',sans-serif;font-weight:700;margin-top:4px">💳 Send Invoice</button>`;
+    const tr  = document.createElement('tr');
+    const amt = o.grand_total ? parseFloat(o.grand_total).toFixed(2) : '';
+    const ppNote = encodeURIComponent(`Miss C's Sweet Treats — Invoice #${o.invoice_num||''}`);
+    const ppUrl  = `https://www.paypal.com/invoice/create?recipient=${encodeURIComponent(o.email||'')}&amount=${amt}&note=${ppNote}&invoiceNumber=${encodeURIComponent(o.invoice_num||'')}`;
+    const ppBtn  = o.pp_invoice_sent
+      ? `<span style="color:#1b5e20;font-weight:700;font-size:0.75rem">✓ Sent</span>`
+      : `<button onclick="window.open('${ppUrl}','_blank');markPPSent('${o.id}')" style="background:#0070ba;color:#fff;border:none;padding:3px 9px;border-radius:8px;font-size:0.75rem;cursor:pointer;font-weight:700;margin-top:4px">💳 Send Invoice</button>`;
     tr.innerHTML = `
       <td>${i+1}</td>
       <td style="font-weight:700;color:var(--purple-mid);font-size:0.8rem">${o.invoice_num||'—'}</td>
-      <td>${o.name}</td>
-      <td>${o.phone||'—'}</td>
+      <td>${o.name}</td><td>${o.phone||'—'}</td>
       <td style="font-size:0.8rem">${o.email||'—'}</td>
-      <td>${o.type}</td>
-      <td>${o.date}</td>
-      <td>$${o.base_total||'—'}</td>
-      <td style="font-size:0.8rem">${parseFloat(o.tax_amt||0)>0?'$'+o.tax_amt:'<em style="color:var(--text-light)">Exempt</em>'}</td>
-      <td style="font-size:0.8rem">$${o.pp_fee||'—'}</td>
+      <td>${o.type}</td><td>${o.date}</td>
+      <td>$${o.tax_amt||'—'}</td>
       <td style="font-weight:800;color:var(--purple-dark)">$${o.grand_total||'—'}</td>
       <td><span class="order-status ${statusColors[o.status] || 'status-new'}">${o.status || 'new'}</span></td>
       <td>
         <select onchange="updateOrderStatus('${o.id}',this.value)" style="font-size:0.75rem;padding:3px 6px;border-radius:6px;border:1px solid #ddd">
-          <option value="new" ${o.status==='new'?'selected':''}>New</option>
+          <option value="new"       ${o.status==='new'?'selected':''}>New</option>
           <option value="confirmed" ${o.status==='confirmed'?'selected':''}>Confirmed</option>
-          <option value="complete" ${o.status==='complete'?'selected':''}>Complete</option>
+          <option value="complete"  ${o.status==='complete'?'selected':''}>Complete</option>
           <option value="cancelled" ${o.status==='cancelled'?'selected':''}>Cancelled</option>
         </select>
         <div style="margin-top:3px">${ppBtn}</div>
@@ -2783,15 +2778,75 @@ async function handleSubmit(e) {
   const form = e.target;
   const inputs = form.querySelectorAll('input, select, textarea');
   const order = {
-    name: inputs[0]?.value || '',
-    phone: inputs[1]?.value || '',
-    type: inputs[3]?.value || '',
-    date: inputs[4]?.value || '',
-    details: inputs[5]?.value || '',
-    status: 'new',
+    name:      inputs[0]?.value || '',
+    phone:     inputs[1]?.value || '',
+    email:     inputs[2]?.value || '',
+    type:      inputs[3]?.value || '',
+    date:      inputs[4]?.value || '',
+    details:   inputs[5]?.value || '',
+    status:    'new',
     submitted: new Date().toLocaleDateString()
   };
   await sb.from('orders').insert(order);
+
+  // Send owner notification email
+  try {
+    await fetch('https://kvdkewezwphtkdemocxk.supabase.co/functions/v1/dynamic-responder', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+      body: JSON.stringify({
+        to: ['misscsweettreats@gmail.com'],
+        subject: `🛎️ New Booking Request — ${order.name}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:2rem;background:#f5f0ff;border-radius:16px">
+          <h2 style="color:#4A2080">New Booking Request! 🎂</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.95rem">
+            <tr><td style="padding:6px 0;color:#666;width:120px">Name</td><td style="font-weight:700">${order.name}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Phone</td><td>${order.phone}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Email</td><td>${order.email||'Not provided'}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Order type</td><td>${order.type}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Date needed</td><td>${order.date}</td></tr>
+            <tr><td style="padding:6px 0;color:#666;vertical-align:top">Details</td><td>${order.details}</td></tr>
+          </table>
+          <p style="margin-top:1.5rem;color:#888;font-size:0.85rem">Log into your admin panel to view and confirm this order.</p>
+        </div>`,
+        from: "Miss C's Sweet Treats <onboarding@resend.dev>"
+      })
+    });
+  } catch(e) { console.warn('Owner notification error:', e); }
+
+  // Send customer confirmation if email provided
+  if (order.email) {
+    try {
+      await fetch('https://kvdkewezwphtkdemocxk.supabase.co/functions/v1/dynamic-responder', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_KEY}` },
+        body: JSON.stringify({
+          to: [order.email],
+          subject: `🎂 Booking Request Received — Miss C's Sweet Treats`,
+          html: `<div style="font-family:'Nunito',sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden">
+            <div style="background:linear-gradient(135deg,#3A1070,#C060A0);padding:2rem;text-align:center">
+              <h1 style="font-family:cursive;color:#fff;font-size:2rem;margin:0">Miss C's Sweet Treats</h1>
+            </div>
+            <div style="padding:2rem">
+              <h2 style="color:#4A2080">Request Received! 🎉</h2>
+              <p style="color:#555">Hi ${order.name}, your booking request has been received! Cassandra will contact you within 24 hours to confirm your order and arrange payment.</p>
+              <div style="background:#f5f0ff;border-radius:12px;padding:1rem;margin:1rem 0;border:1px solid #E8D8F8;font-size:0.9rem;color:#333">
+                <p><strong>Order type:</strong> ${order.type}</p>
+                <p><strong>Date needed:</strong> ${order.date}</p>
+                <p><strong>Details:</strong> ${order.details}</p>
+              </div>
+              <p style="background:#f0fff4;padding:0.75rem;border-radius:8px;font-size:0.82rem;color:#1b5e20">Cassandra will contact you to confirm and arrange payment. Please allow 48–72 hours minimum. Holiday orders require 1–2 weeks advance notice.</p>
+            </div>
+            <div style="background:#F8F0FF;padding:1.25rem;text-align:center;font-size:0.8rem;color:#888">
+              Miss C's Sweet Treats · <a href="tel:2563072637" style="color:#7B3FAF">(256) 307-2637</a> · <a href="mailto:misscsweettreats@gmail.com" style="color:#7B3FAF">misscsweettreats@gmail.com</a>
+            </div>
+          </div>`,
+          from: "Miss C's Sweet Treats <onboarding@resend.dev>"
+        })
+      });
+    } catch(e) { console.warn('Customer booking email error:', e); }
+  }
+
   const btn = form.querySelector('.btn-submit');
   btn.textContent = '✅ Request Sent! We\'ll contact you soon.';
   btn.style.background = '#2A7A40';
@@ -3155,59 +3210,134 @@ function renderCart() {
   customNote.style.display = hasCustom ? 'block' : 'none';
 }
 
-// ── Alabama / Tallapoosa County Tax & PayPal Fee ─────
-// Tallapoosa County: 4% state + 2% county = 6% for catering/prepared food
-// Pickup baked goods: exempt under Alabama law
-const PP_RATE   = 0.0299;  // PayPal 2.99% invoicing fee
-const TAX_RATE  = 0.06;    // 6% Tallapoosa County (state 4% + county 2%)
+// ── Tax & Fee — Dadeville, AL ─────────────────────────
+// AL state 4% + Tallapoosa County 2% + Dadeville city 3.5% = 9.5% total
+// PayPal 2.99% baked silently into prices — not shown to customer
+const AL_STATE_TAX  = 0.04;
+const AL_COUNTY_TAX = 0.02;
+const AL_CITY_TAX   = 0.035;
+const AL_TOTAL_TAX  = 0.095; // 9.5% combined
+const PP_FEE_RATE   = 0.0299;
 
-function calcOrderTotals(baseTotal, isCatering) {
-  const taxAmt     = isCatering ? baseTotal * TAX_RATE : 0;
-  const subtotal   = baseTotal + taxAmt;
-  const ppFee      = subtotal * PP_RATE;
-  const grandTotal = subtotal + ppFee;
-  return { baseTotal, taxAmt, ppFee, grandTotal, isCatering };
+function calcTotals(baseAmt) {
+  const withPP     = +(baseAmt / (1 - PP_FEE_RATE)).toFixed(2);
+  const stateTax   = +(withPP * AL_STATE_TAX).toFixed(2);
+  const countyTax  = +(withPP * AL_COUNTY_TAX).toFixed(2);
+  const cityTax    = +(withPP * AL_CITY_TAX).toFixed(2);
+  const totalTax   = +(withPP * AL_TOTAL_TAX).toFixed(2);
+  const grandTotal = +(withPP + totalTax).toFixed(2);
+  return { baseAmt, withPP, stateTax, countyTax, cityTax, totalTax, grandTotal };
 }
 
-let _invNum   = '';
-let _totals   = null;
+let _invNum = '';
+let _totals = null;
+
+// ── Customer auth ─────────────────────────────────────
+let custUser = null;
+
+function openCustLogin() {
+  if (custUser) {
+    document.getElementById('custLoginForm').style.display  = 'none';
+    document.getElementById('custRegForm').style.display    = 'none';
+    document.getElementById('custLoggedIn').style.display   = 'block';
+    document.getElementById('custWelcomeName').textContent  = 'Hi, ' + (custUser.name || 'Friend') + '!';
+    document.getElementById('custWelcomeEmail').textContent = custUser.email || '';
+  } else {
+    custSwitchTab('login');
+    document.getElementById('custLoggedIn').style.display = 'none';
+  }
+  document.getElementById('custAuthModal').classList.add('open');
+}
+function closeCustLogin() { document.getElementById('custAuthModal').classList.remove('open'); }
+
+function custSwitchTab(tab) {
+  const isLogin = tab === 'login';
+  document.getElementById('custLoginForm').style.display = isLogin ? 'block' : 'none';
+  document.getElementById('custRegForm').style.display   = isLogin ? 'none'  : 'block';
+  document.getElementById('custLoggedIn').style.display  = 'none';
+  document.getElementById('custTabLogin').style.background = isLogin ? 'var(--purple-mid)' : 'transparent';
+  document.getElementById('custTabLogin').style.color      = isLogin ? '#fff' : 'var(--purple-mid)';
+  document.getElementById('custTabReg').style.background   = isLogin ? 'transparent' : 'var(--purple-mid)';
+  document.getElementById('custTabReg').style.color        = isLogin ? 'var(--purple-mid)' : '#fff';
+}
+
+async function doCustLogin() {
+  const email = document.getElementById('custLoginEmail').value.trim();
+  const pass  = document.getElementById('custLoginPass').value;
+  const err   = document.getElementById('custLoginErr');
+  const btn   = document.getElementById('custLoginSubmitBtn');
+  if (!email || !pass) { err.style.display = 'block'; return; }
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: pass });
+  btn.textContent = 'Sign In'; btn.disabled = false;
+  if (error || !data.session) { err.style.display = 'block'; return; }
+  err.style.display = 'none';
+  const meta = data.user.user_metadata || {};
+  custUser = { email, name: meta.name || '', phone: meta.phone || '' };
+  updateCustUI(); closeCustLogin(); autofillOrderForm();
+}
+
+async function doCustRegister() {
+  const name  = document.getElementById('custRegName').value.trim();
+  const phone = document.getElementById('custRegPhone').value.trim();
+  const email = document.getElementById('custRegEmail').value.trim();
+  const pass  = document.getElementById('custRegPass').value;
+  const err   = document.getElementById('custRegErr');
+  const btn   = document.getElementById('custRegSubmitBtn');
+  if (!name || !email || !pass) { err.textContent = 'Please fill in all required fields.'; err.style.display = 'block'; return; }
+  btn.textContent = 'Creating…'; btn.disabled = true;
+  const { data, error } = await sb.auth.signUp({ email, password: pass, options: { data: { name, phone } } });
+  btn.textContent = 'Create Account'; btn.disabled = false;
+  if (error) { err.textContent = error.message; err.style.display = 'block'; return; }
+  custUser = { email, name, phone };
+  updateCustUI(); closeCustLogin(); autofillOrderForm();
+}
+
+async function doCustLogout() {
+  await sb.auth.signOut(); custUser = null; updateCustUI(); closeCustLogin();
+}
+
+function updateCustUI() {
+  const lbl = document.getElementById('custLoginLabel');
+  if (lbl) lbl.textContent = custUser ? ('👤 ' + (custUser.name ? custUser.name.split(' ')[0] : 'Account')) : '👤 Sign In';
+  const hint = document.getElementById('mc-login-hint');
+  if (hint) hint.style.display = custUser ? 'none' : 'inline-flex';
+}
+
+function autofillOrderForm() {
+  if (!custUser) return;
+  const nm = document.getElementById('mc-cust-name');
+  const em = document.getElementById('mc-cust-email');
+  const ph = document.getElementById('mc-cust-phone');
+  if (nm && !nm.value) nm.value = custUser.name  || '';
+  if (em && !em.value) em.value = custUser.email || '';
+  if (ph && !ph.value) ph.value = custUser.phone || '';
+}
+
+async function restoreCustSession() {
+  const { data: { session } } = await sb.auth.getSession();
+  if (session && session.user) {
+    const meta = session.user.user_metadata || {};
+    custUser = { email: session.user.email, name: meta.name || '', phone: meta.phone || '' };
+    updateCustUI();
+  }
+}
 
 function renderInvoice() {
   const box   = document.getElementById('invoiceBox');
   _invNum     = 'MC-' + Math.floor(100000 + Math.random() * 900000);
   const today = new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' });
 
-  let baseTotal = 0, hasCustom = false;
-  const isCatering = orderCart.some(i => (i.name||'').toLowerCase().includes('catering'));
-
+  let baseAmt = 0, hasCustom = false;
   const rows = orderCart.map(item => {
-    if (item.custom) {
-      hasCustom = true;
-      return `<tr><td>${item.name}</td><td>1</td><td>Custom</td><td>TBD</td></tr>`;
-    }
+    if (item.custom) { hasCustom = true; return `<tr><td>${item.name}</td><td>1</td><td>Custom</td><td>TBD</td></tr>`; }
     const line = item.num * item.qty;
-    baseTotal += line;
+    baseAmt += line;
     return `<tr><td>${item.name}</td><td>${item.qty}</td><td>${item.price}</td><td>$${line.toFixed(2)}</td></tr>`;
   }).join('');
 
-  _totals = calcOrderTotals(baseTotal, isCatering);
+  _totals = calcTotals(baseAmt);
   const t = _totals;
-
-  const taxRow = t.taxAmt > 0
-    ? `<tr style="font-size:0.82rem;color:var(--text-light)">
-         <td colspan="3" style="text-align:right;padding-right:0.75rem">Tallapoosa County Sales Tax (6% — Catering)</td>
-         <td>$${t.taxAmt.toFixed(2)}</td>
-       </tr>`
-    : `<tr style="font-size:0.78rem">
-         <td colspan="4" style="color:var(--text-light);font-style:italic;padding-top:4px">
-           🏷️ Pickup baked goods — Alabama sales tax exempt for home consumption
-         </td>
-       </tr>`;
-
-  const ppRow = `<tr style="font-size:0.82rem;color:var(--text-light)">
-    <td colspan="3" style="text-align:right;padding-right:0.75rem">PayPal Processing Fee (2.99%)</td>
-    <td>$${t.ppFee.toFixed(2)}</td>
-  </tr>`;
 
   box.innerHTML = `
     <div class="invoice-header">
@@ -3217,214 +3347,174 @@ function renderInvoice() {
     </div>
     <table class="invoice-table">
       <thead><tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr></thead>
-      <tbody>${rows}${taxRow}${ppRow}</tbody>
+      <tbody>
+        ${rows}
+        <tr style="font-size:0.82rem;color:var(--text-light)">
+          <td colspan="3" style="text-align:right;padding-right:0.75rem">Alabama State Tax (4%)</td>
+          <td>$${t.stateTax.toFixed(2)}</td>
+        </tr>
+        <tr style="font-size:0.82rem;color:var(--text-light)">
+          <td colspan="3" style="text-align:right;padding-right:0.75rem">Tallapoosa County Tax (2%)</td>
+          <td>$${t.countyTax.toFixed(2)}</td>
+        </tr>
+        <tr style="font-size:0.82rem;color:var(--text-light)">
+          <td colspan="3" style="text-align:right;padding-right:0.75rem">Dadeville City Tax (3.5%)</td>
+          <td>$${t.cityTax.toFixed(2)}</td>
+        </tr>
+      </tbody>
     </table>
     <div class="cart-total" style="margin-top:0">
       <span class="cart-total-label" style="font-weight:800">Total Due</span>
-      <span class="cart-total-amount">$${t.grandTotal.toFixed(2)}${hasCustom ? ' + quotes' : ''}</span>
+      <span class="cart-total-amount" style="color:var(--purple-dark)">$${t.grandTotal.toFixed(2)}${hasCustom ? ' + quotes' : ''}</span>
     </div>
     ${hasCustom ? '<p style="font-size:0.78rem;color:var(--text-light);margin-top:0.5rem;text-align:center">Custom items will be quoted and confirmed by Cassandra before payment.</p>' : ''}
     <div style="background:#f0fff4;border-radius:8px;padding:0.6rem 1rem;margin-top:0.75rem;font-size:0.8rem;color:#1b5e20;border:1px solid #c8e6c9;text-align:center">
-      ⚠️ No payment is taken now — Cassandra will send a PayPal invoice once your order is confirmed.
+      ⚠️ No payment taken now — Cassandra will send a PayPal invoice once your order is confirmed.
     </div>
     <div class="invoice-footer">
       <p>All items made fresh to order · Minimum 48-hour notice required</p>
       <p style="margin-top:4px">Thank you for choosing Miss C's Sweet Treats! 🎂</p>
     </div>`;
 
-  // Reset UI: show info form, hide success
-  document.getElementById('mc-info-step').style.display = 'block';
+  document.getElementById('mc-info-step').style.display    = 'block';
   document.getElementById('mc-success-step').style.display = 'none';
-  document.getElementById('mc-lookup-result').style.display = 'none';
+  if (document.getElementById('mc-lookup-result'))
+    document.getElementById('mc-lookup-result').style.display = 'none';
+  autofillOrderForm();
 }
 
-// Toggle password field when "save account" is checked
-document.addEventListener('DOMContentLoaded', () => {
-  const chk = document.getElementById('mc-save-acct');
-  if (chk) chk.addEventListener('change', () => {
-    document.getElementById('mc-acct-pass-wrap').style.display = chk.checked ? 'block' : 'none';
-  });
-});
-
 async function mcSubmitOrder() {
-  const name  = (document.getElementById('mc-cust-name')?.value || '').trim();
+  const name  = (document.getElementById('mc-cust-name')?.value  || '').trim();
   const email = (document.getElementById('mc-cust-email')?.value || '').trim();
   const phone = (document.getElementById('mc-cust-phone')?.value || '').trim();
-  const saveAcct = document.getElementById('mc-save-acct')?.checked;
-  const pass  = (document.getElementById('mc-cust-pass')?.value || '').trim();
-
   if (!name)  { alert('Please enter your name.');  return; }
   if (!email) { alert('Please enter your email.'); return; }
-  if (saveAcct && !pass) { alert('Please create a password to save your account.'); return; }
 
   const btn = document.getElementById('mc-submit-btn');
-  btn.textContent = '⏳ Submitting...';
-  btn.disabled = true;
+  btn.textContent = '⏳ Submitting…'; btn.disabled = true;
 
-  const t       = _totals || { baseTotal:0, taxAmt:0, ppFee:0, grandTotal:0, isCatering:false };
-  const invNum  = _invNum || ('MC-' + Math.floor(100000 + Math.random() * 900000));
-  const today   = new Date().toLocaleDateString();
+  const t      = _totals || calcTotals(0);
+  const invNum = _invNum || ('MC-' + Math.floor(100000 + Math.random() * 900000));
+  const today  = new Date().toLocaleDateString();
 
   const itemLines = orderCart.map(i => i.custom
     ? `• ${i.name} — Custom: ${i.notes || 'TBD'}`
     : `• ${i.name} × ${i.qty} = $${(i.num * i.qty).toFixed(2)}`
   ).join('\n');
 
-  const details = orderCart.map(i => i.custom
-    ? i.name + ' (Custom: ' + (i.notes||'') + ')'
-    : i.name + ' x' + i.qty
-  ).join('; ');
-
   // Save to Supabase
   try {
     await sb.from('orders').insert({
-      name, phone, email,
-      type: 'Online Order',
-      date: today,
-      details: `[#${invNum}] ${details} | Base: $${t.baseTotal.toFixed(2)}${t.taxAmt>0?' | Tax: $'+t.taxAmt.toFixed(2):' | Tax: Exempt'} | PP Fee: $${t.ppFee.toFixed(2)} | TOTAL: $${t.grandTotal.toFixed(2)}`,
-      invoice_num: invNum,
-      base_total: t.baseTotal.toFixed(2),
-      tax_amt: t.taxAmt.toFixed(2),
-      pp_fee: t.ppFee.toFixed(2),
-      grand_total: t.grandTotal.toFixed(2),
-      has_account: saveAcct,
-      status: 'new',
-      submitted: today
+      name, phone, email, type: 'Online Order', date: today,
+      details: `[#${invNum}] ${orderCart.map(i=>i.custom?i.name+' (Custom)':i.name+' x'+i.qty).join('; ')} | State: $${t.stateTax.toFixed(2)} | County: $${t.countyTax.toFixed(2)} | City: $${t.cityTax.toFixed(2)} | TOTAL: $${t.grandTotal.toFixed(2)}`,
+      invoice_num: invNum, base_total: t.baseAmt.toFixed(2), tax_amt: t.totalTax.toFixed(2),
+      pp_fee: (t.withPP - t.baseAmt).toFixed(2), grand_total: t.grandTotal.toFixed(2),
+      status: 'new', submitted: today
     });
-  } catch(e) { console.warn('Supabase insert error:', e); }
+  } catch(e) { console.warn('Supabase save:', e); }
 
-  // Optional: create account
-  if (saveAcct && pass) {
-    try { await sb.auth.signUp({ email, password: pass, options: { data: { name, phone } } }); }
-    catch(e) { console.warn('Signup note:', e); }
-  }
-
-  // Email to customer
-  const emailHtml = `
-    <div style="font-family:'Nunito',sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden">
-      <div style="background:linear-gradient(135deg,#3A1070,#C060A0);padding:2rem;text-align:center">
-        <h1 style="font-family:cursive;color:#fff;font-size:2rem;margin:0">Miss C's Sweet Treats</h1>
-        <p style="color:#E0C8F8;margin:0.5rem 0 0;font-size:0.9rem">Homemade with love, served with joy 🎂</p>
-      </div>
-      <div style="padding:2rem">
-        <h2 style="color:#4A2080">Order Recorded! 🎉</h2>
-        <p style="color:#555">Hi ${name}, your order has been recorded. Cassandra will contact you within 24 hours to confirm and send your PayPal invoice.</p>
-        <div style="background:#f5f0ff;border-radius:12px;padding:1rem 1.25rem;margin:1rem 0;border:1px solid #E8D8F8">
-          <p style="font-weight:700;color:#4A2080;margin-bottom:0.5rem">📋 Invoice #${invNum}</p>
-          <pre style="font-family:inherit;font-size:0.9rem;color:#333;white-space:pre-wrap;margin:0">${itemLines}</pre>
-          <hr style="border:none;border-top:1px dashed #E8D8F8;margin:0.75rem 0">
-          ${t.taxAmt > 0
-            ? `<p style="font-size:0.85rem;color:#555;margin:2px 0">Tallapoosa County Tax (6%): $${t.taxAmt.toFixed(2)}</p>`
-            : `<p style="font-size:0.85rem;color:#888;font-style:italic;margin:2px 0">Sales tax: Exempt (pickup baked goods)</p>`}
-          <p style="font-size:0.85rem;color:#555;margin:2px 0">PayPal Fee (2.99%): $${t.ppFee.toFixed(2)}</p>
-          <p style="font-weight:800;color:#4A2080;font-size:1.1rem;margin-top:0.5rem">Total Due: $${t.grandTotal.toFixed(2)}${orderCart.some(i=>i.custom)?' + custom quotes':''}</p>
-        </div>
-        <div style="background:#f0fff4;border-radius:8px;padding:0.75rem 1rem;font-size:0.82rem;color:#1b5e20;border:1px solid #c8e6c9">
-          ⚠️ <strong>No payment has been taken.</strong> You will receive a PayPal invoice from Cassandra once your order is confirmed.
-        </div>
-      </div>
-      <div style="background:#F8F0FF;padding:1.25rem;text-align:center;font-size:0.8rem;color:#888">
-        Miss C's Sweet Treats · <a href="tel:2563072637" style="color:#7B3FAF">(256) 307-2637</a> ·
-        <a href="mailto:misscsweettreats@gmail.com" style="color:#7B3FAF">misscsweettreats@gmail.com</a>
-      </div>
-    </div>`;
-
+  // Customer confirmation email
   try {
     await fetch('https://kvdkewezwphtkdemocxk.supabase.co/functions/v1/dynamic-responder', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_KEY}`},
-      body:JSON.stringify({
-        to:[email],
-        subject:`🎂 Order Confirmed! Invoice #${invNum} — Miss C's Sweet Treats`,
-        html:emailHtml,
-        from:"Miss C's Sweet Treats <onboarding@resend.dev>"
+      body: JSON.stringify({
+        to: [email],
+        subject: `🎂 Order Confirmed! Invoice #${invNum} — Miss C's Sweet Treats`,
+        html: `<div style="font-family:'Nunito',sans-serif;max-width:600px;margin:0 auto;background:#fff;border-radius:16px;overflow:hidden">
+          <div style="background:linear-gradient(135deg,#3A1070,#C060A0);padding:2rem;text-align:center">
+            <h1 style="font-family:cursive;color:#fff;font-size:2rem;margin:0">Miss C's Sweet Treats</h1>
+          </div>
+          <div style="padding:2rem">
+            <h2 style="color:#4A2080">Order Recorded! 🎉</h2>
+            <p style="color:#555">Hi ${name}, your order has been recorded. Cassandra will contact you within 24 hours.</p>
+            <div style="background:#f5f0ff;border-radius:12px;padding:1rem;margin:1rem 0;border:1px solid #E8D8F8">
+              <p style="font-weight:700;color:#4A2080;margin:0 0 0.5rem">📋 Invoice #${invNum}</p>
+              <pre style="font-family:inherit;font-size:0.9rem;white-space:pre-wrap;margin:0">${itemLines}</pre>
+              <hr style="border:none;border-top:1px dashed #E8D8F8;margin:0.75rem 0">
+              <p style="margin:2px 0;font-size:0.85rem">Alabama State Tax (4%): $${t.stateTax.toFixed(2)}</p>
+              <p style="margin:2px 0;font-size:0.85rem">Tallapoosa County Tax (2%): $${t.countyTax.toFixed(2)}</p>
+              <p style="margin:2px 0;font-size:0.85rem">Dadeville City Tax (3.5%): $${t.cityTax.toFixed(2)}</p>
+              <p style="font-weight:800;color:#4A2080;font-size:1.1rem;margin-top:0.5rem">Total Due: $${t.grandTotal.toFixed(2)}</p>
+            </div>
+            <p style="background:#f0fff4;padding:0.75rem;border-radius:8px;font-size:0.82rem;color:#1b5e20">⚠️ No payment taken yet — you'll receive a PayPal invoice from Cassandra once confirmed.</p>
+          </div>
+          <div style="background:#F8F0FF;padding:1.25rem;text-align:center;font-size:0.8rem;color:#888">
+            Miss C's Sweet Treats · <a href="tel:2563072637" style="color:#7B3FAF">(256) 307-2637</a> · <a href="mailto:misscsweettreats@gmail.com" style="color:#7B3FAF">misscsweettreats@gmail.com</a>
+          </div>
+        </div>`,
+        from: "Miss C's Sweet Treats <onboarding@resend.dev>"
       })
     });
   } catch(e) { console.warn('Customer email error:', e); }
 
-  // Owner notification
+  // ── Owner notification — sends to misscsweettreats@gmail.com ──
   try {
     await fetch('https://kvdkewezwphtkdemocxk.supabase.co/functions/v1/dynamic-responder', {
       method:'POST',
       headers:{'Content-Type':'application/json','Authorization':`Bearer ${SUPABASE_KEY}`},
-      body:JSON.stringify({
-        to:['misscsweettreats@gmail.com'],
-        subject:`🛎️ New Order! Invoice #${invNum} — ${name}`,
-        html:`<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:2rem">
-          <h2 style="color:#4A2080">New Order! 🎂</h2>
-          <p><strong>Customer:</strong> ${name} | ${email} | ${phone||'No phone'}</p>
-          <p><strong>Invoice:</strong> #${invNum}</p>
-          <pre style="background:#f5f0ff;padding:1rem;border-radius:8px;white-space:pre-wrap">${itemLines}</pre>
-          <p><strong>Base:</strong> $${t.baseTotal.toFixed(2)}</p>
-          ${t.taxAmt>0?`<p><strong>Tax (6%):</strong> $${t.taxAmt.toFixed(2)}</p>`:'<p><em>Tax: Exempt (pickup)</em></p>'}
-          <p><strong>PayPal Fee:</strong> $${t.ppFee.toFixed(2)}</p>
-          <p style="font-size:1.2rem;font-weight:700;color:#4A2080">TOTAL TO INVOICE: $${t.grandTotal.toFixed(2)}</p>
-          <p style="color:#888;font-size:0.85rem">Log into admin to confirm and send the PayPal invoice.</p>
+      body: JSON.stringify({
+        to: ['misscsweettreats@gmail.com'],
+        subject: `🛎️ New Order! Invoice #${invNum} — ${name}`,
+        html: `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:2rem;background:#f5f0ff;border-radius:16px">
+          <h2 style="color:#4A2080">New Order Received! 🎂</h2>
+          <table style="width:100%;border-collapse:collapse;font-size:0.95rem;margin-bottom:1rem">
+            <tr><td style="padding:6px 0;color:#666;width:120px">Customer</td><td style="font-weight:700">${name}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Email</td><td>${email}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Phone</td><td>${phone||'—'}</td></tr>
+            <tr><td style="padding:6px 0;color:#666">Invoice</td><td style="font-weight:700;color:#4A2080">#${invNum}</td></tr>
+          </table>
+          <div style="background:#fff;border-radius:8px;padding:1rem;margin-bottom:1rem">
+            <pre style="font-family:inherit;font-size:0.9rem;white-space:pre-wrap;margin:0">${itemLines}</pre>
+          </div>
+          <table style="width:100%;font-size:0.9rem">
+            <tr><td style="color:#666">State Tax (4%)</td><td style="text-align:right">$${t.stateTax.toFixed(2)}</td></tr>
+            <tr><td style="color:#666">County Tax (2%)</td><td style="text-align:right">$${t.countyTax.toFixed(2)}</td></tr>
+            <tr><td style="color:#666">City Tax (3.5%)</td><td style="text-align:right">$${t.cityTax.toFixed(2)}</td></tr>
+            <tr style="font-size:1.1rem;font-weight:700;color:#4A2080"><td>TOTAL TO INVOICE</td><td style="text-align:right">$${t.grandTotal.toFixed(2)}</td></tr>
+          </table>
+          <p style="margin-top:1rem;color:#888;font-size:0.85rem">Log into your admin panel to confirm and send the PayPal invoice.</p>
         </div>`,
-        from:"Miss C's Sweet Treats <onboarding@resend.dev>"
+        from: "Miss C's Sweet Treats <onboarding@resend.dev>"
       })
     });
   } catch(e) { console.warn('Owner email error:', e); }
 
-  btn.textContent = '✅ Submit Order Request';
-  btn.disabled = false;
-
-  // Show success panel
-  document.getElementById('mc-info-step').style.display = 'none';
+  btn.textContent = '✅ Submit Order Request'; btn.disabled = false;
+  document.getElementById('mc-info-step').style.display    = 'none';
   document.getElementById('mc-success-step').style.display = 'block';
   document.getElementById('mc-suc-inv').textContent   = '🧾 Invoice #' + invNum;
-  document.getElementById('mc-suc-total').textContent = '$' + t.grandTotal.toFixed(2) + (orderCart.some(i=>i.custom) ? ' + quotes' : '');
+  document.getElementById('mc-suc-total').textContent = '$' + t.grandTotal.toFixed(2) + (orderCart.some(i=>i.custom)?' + quotes':'');
   document.getElementById('mc-suc-email').textContent = email;
-
-  orderCart = [];
-  updateCartBubble();
+  orderCart = []; updateCartBubble();
 }
 
 async function mcLookupInvoice() {
   const q  = (document.getElementById('mc-lookup-input')?.value || '').trim().toUpperCase();
   if (!q)  { alert('Please enter an invoice number.'); return; }
   const el = document.getElementById('mc-lookup-result');
-  el.innerHTML = '<p style="color:var(--text-light);font-size:0.82rem;padding:0.5rem 0">Searching...</p>';
+  el.innerHTML = '<p style="color:var(--text-light);font-size:0.82rem;padding:0.5rem 0">Searching…</p>';
   el.style.display = 'block';
-
   const { data } = await sb.from('orders').select('*').eq('invoice_num', q).single();
-  if (!data) {
-    el.innerHTML = `<p style="color:var(--text-light);text-align:center;padding:0.75rem;font-size:0.85rem">No order found for <strong>${q}</strong>. Please check your invoice number.</p>`;
-    return;
-  }
+  if (!data) { el.innerHTML = `<p style="color:#5A3880;text-align:center;padding:0.75rem;font-size:0.85rem">No order found for <strong>${q}</strong>.</p>`; return; }
   const sc = { new:'#bf360c', confirmed:'#1b5e20', complete:'#0d47a1', cancelled:'#888' };
-  el.innerHTML = `
-    <div style="background:var(--purple-ghost);border-radius:12px;padding:1rem;border:1px solid var(--purple-pale);font-size:0.85rem;color:var(--text-mid);line-height:1.8">
-      <div style="font-weight:800;color:var(--purple-dark);font-size:0.95rem;margin-bottom:0.4rem">🧾 Invoice #${data.invoice_num}</div>
-      <div><strong>Name:</strong> ${data.name}</div>
-      <div><strong>Order:</strong> ${data.type}</div>
-      <div><strong>Date placed:</strong> ${data.submitted}</div>
-      <div style="margin-top:0.5rem;padding-top:0.5rem;border-top:1px dashed var(--purple-pale)">
-        <div><strong>Base total:</strong> $${data.base_total||'—'}</div>
-        <div><strong>Tax:</strong> ${data.tax_amt>0?'$'+data.tax_amt:'Exempt (pickup)'}</div>
-        <div><strong>PayPal fee:</strong> $${data.pp_fee||'0.00'}</div>
-        <div style="font-weight:800;color:var(--purple-dark);font-size:1rem"><strong>Total due:</strong> $${data.grand_total||'—'}</div>
-      </div>
-      <div style="margin-top:0.5rem"><strong>Status:</strong> <span style="color:${sc[data.status]||'#555'};font-weight:700;text-transform:capitalize">${data.status}</span></div>
-    </div>`;
+  el.innerHTML = `<div style="background:#fff;border-radius:12px;padding:1rem;border:1px solid var(--purple-pale);font-size:0.85rem;color:#2A1040;line-height:1.8">
+    <div style="font-weight:800;color:var(--purple-dark);margin-bottom:0.4rem">🧾 Invoice #${data.invoice_num}</div>
+    <div><strong>Name:</strong> ${data.name}</div>
+    <div><strong>Date placed:</strong> ${data.submitted}</div>
+    <div style="font-weight:800;color:var(--purple-dark);font-size:1rem;margin-top:0.5rem"><strong>Total Due:</strong> $${data.grand_total||'—'}</div>
+    <div><strong>Status:</strong> <span style="color:${sc[data.status]||'#555'};font-weight:700;text-transform:capitalize">${data.status}</span></div>
+  </div>`;
 }
 
 function mcCloseAndReset() {
   closeOrderModal();
-  // Reset invoice panel for next use
-  document.getElementById('mc-info-step').style.display = 'block';
+  document.getElementById('mc-info-step').style.display    = 'block';
   document.getElementById('mc-success-step').style.display = 'none';
-  document.getElementById('mc-cust-name').value  = '';
-  document.getElementById('mc-cust-email').value = '';
-  document.getElementById('mc-cust-phone').value = '';
-  document.getElementById('mc-save-acct').checked = false;
-  document.getElementById('mc-acct-pass-wrap').style.display = 'none';
-  document.getElementById('mc-cust-pass').value  = '';
-  document.getElementById('mc-lookup-input').value = '';
-  document.getElementById('mc-lookup-result').style.display = 'none';
+  ['mc-cust-name','mc-cust-email','mc-cust-phone','mc-lookup-input'].forEach(id => { const el=document.getElementById(id); if(el) el.value=''; });
+  if (document.getElementById('mc-lookup-result')) document.getElementById('mc-lookup-result').style.display = 'none';
 }
 
-// Legacy stub — no longer used
 async function proceedToPayment() { mcSubmitOrder(); }
 
 // Override gallery link to open ordering modal
@@ -3592,6 +3682,45 @@ document.addEventListener('DOMContentLoaded', () => {
 <!-- Admin Float Button -->
 <button id="adminBtn" onclick="openAdminLogin()" title="Admin">⚙️</button>
 
+<!-- Customer Login Float Button -->
+<button onclick="openCustLogin()" title="My Account" style="position:fixed;bottom:20px;right:130px;z-index:900;background:var(--purple-mid);color:#fff;border:none;border-radius:50px;padding:0.6rem 1.1rem;font-family:'Nunito',sans-serif;font-weight:700;font-size:0.82rem;cursor:pointer;box-shadow:0 4px 16px rgba(74,32,128,0.35);display:flex;align-items:center;gap:6px">
+  <span id="custLoginLabel">👤 Sign In</span>
+</button>
+
+<!-- Customer Login / Register Modal -->
+<div class="admin-modal" id="custAuthModal">
+  <div class="admin-modal-box" style="max-width:400px">
+    <button class="modal-close" onclick="closeCustLogin()">✕</button>
+    <h2 style="font-family:'Dancing Script',cursive;color:var(--purple-dark);font-size:1.8rem;text-align:center;margin-bottom:0.25rem">Welcome Back! 🎂</h2>
+    <p style="text-align:center;color:var(--text-light);font-size:0.82rem;margin-bottom:1.25rem">Sign in to auto-fill your info and track orders</p>
+    <div style="display:flex;gap:0;margin-bottom:1.25rem;border:1.5px solid var(--purple-pale);border-radius:10px;overflow:hidden">
+      <button id="custTabLogin" onclick="custSwitchTab('login')" style="flex:1;padding:0.55rem;font-size:0.82rem;font-weight:700;border:none;background:var(--purple-mid);color:#fff;cursor:pointer;font-family:'Nunito',sans-serif">Sign In</button>
+      <button id="custTabReg" onclick="custSwitchTab('register')" style="flex:1;padding:0.55rem;font-size:0.82rem;font-weight:700;border:none;background:transparent;color:var(--purple-mid);cursor:pointer;font-family:'Nunito',sans-serif">Create Account</button>
+    </div>
+    <div id="custLoginForm">
+      <div class="admin-field"><label>Email</label><input type="email" id="custLoginEmail" placeholder="your@email.com"></div>
+      <div class="admin-field"><label>Password</label><input type="password" id="custLoginPass" placeholder="Your password" onkeydown="if(event.key==='Enter')doCustLogin()"></div>
+      <button class="admin-login-btn" onclick="doCustLogin()" id="custLoginSubmitBtn">Sign In</button>
+      <p id="custLoginErr" style="color:#cc0000;font-size:0.8rem;display:none;margin-top:0.5rem;text-align:center">Incorrect email or password.</p>
+    </div>
+    <div id="custRegForm" style="display:none">
+      <div class="admin-field"><label>Full Name *</label><input type="text" id="custRegName" placeholder="Jane Smith"></div>
+      <div class="admin-field"><label>Phone</label><input type="tel" id="custRegPhone" placeholder="(000) 000-0000"></div>
+      <div class="admin-field"><label>Email *</label><input type="email" id="custRegEmail" placeholder="your@email.com"></div>
+      <div class="admin-field"><label>Password *</label><input type="password" id="custRegPass" placeholder="Create a password"></div>
+      <button class="admin-login-btn" onclick="doCustRegister()" id="custRegSubmitBtn">Create Account</button>
+      <p id="custRegErr" style="color:#cc0000;font-size:0.8rem;display:none;margin-top:0.5rem;text-align:center"></p>
+    </div>
+    <div id="custLoggedIn" style="display:none;text-align:center">
+      <div style="font-size:2rem;margin-bottom:0.5rem">👋</div>
+      <p style="font-weight:700;color:var(--purple-dark);font-size:1rem" id="custWelcomeName">Hi!</p>
+      <p style="font-size:0.82rem;color:var(--text-light);margin:0.25rem 0 1rem" id="custWelcomeEmail"></p>
+      <button class="admin-login-btn" style="background:var(--purple-pale);color:var(--purple-dark);margin-bottom:0.5rem" onclick="closeCustLogin()">Continue Shopping</button>
+      <button class="admin-login-btn" style="background:#f5f0ff;color:#cc3333;border:1px solid #eec0c0" onclick="doCustLogout()">Sign Out</button>
+    </div>
+  </div>
+</div>
+
 <!-- ══════════════════════════════════════
      ONLINE ORDERING SYSTEM
 ══════════════════════════════════════ -->
@@ -3635,60 +3764,52 @@ document.addEventListener('DOMContentLoaded', () => {
       </div>
     </div>
 
-    <!-- PANEL 3: Invoice + Customer Info + Lookup -->
+    <!-- PANEL 3: Invoice + Contact Info (all in one modal) -->
     <div class="order-panel" id="order-panel-invoice">
-
-      <!-- Invoice preview -->
       <div class="invoice-box" id="invoiceBox"></div>
 
-      <!-- ── STEP A: Customer info (shown first) ── -->
+      <!-- Contact info form — dark text, login autofill -->
       <div id="mc-info-step">
-        <div style="margin-top:1.25rem;background:var(--purple-ghost);border-radius:16px;padding:1.25rem;border:1.5px solid var(--purple-pale)">
-          <p style="font-weight:800;color:var(--purple-dark);font-size:0.9rem;margin-bottom:0.25rem">📋 Your Contact Info</p>
-          <p style="color:var(--text-light);font-size:0.78rem;margin-bottom:1rem">So Cassandra can confirm your order and send your PayPal invoice.</p>
+        <div style="margin-top:1.25rem;background:#f5f0ff;border-radius:16px;padding:1.25rem;border:1.5px solid var(--purple-pale)">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:0.75rem;flex-wrap:wrap;gap:8px">
+            <div>
+              <p style="font-weight:800;color:#2A1040;font-size:0.9rem;margin-bottom:0.15rem">📋 Your Contact Info</p>
+              <p style="color:#5A3880;font-size:0.78rem">Cassandra will confirm your order and send your PayPal invoice.</p>
+            </div>
+            <button onclick="openCustLogin()" id="mc-login-hint" style="font-size:0.75rem;padding:0.35rem 0.85rem;border-radius:20px;border:1.5px solid var(--purple-pale);background:#fff;color:var(--purple-mid);cursor:pointer;font-family:'Nunito',sans-serif;font-weight:700;white-space:nowrap">👤 Sign in to auto-fill</button>
+          </div>
           <div class="form-row" style="margin-bottom:0.85rem">
             <div class="form-group" style="margin-bottom:0">
-              <label>Full Name *</label>
-              <input type="text" id="mc-cust-name" placeholder="Jane Smith">
+              <label style="color:#2A1040">Full Name *</label>
+              <input type="text" id="mc-cust-name" placeholder="Jane Smith" style="color:#2A1040;background:#fff">
             </div>
             <div class="form-group" style="margin-bottom:0">
-              <label>Phone</label>
-              <input type="tel" id="mc-cust-phone" placeholder="(000) 000-0000">
+              <label style="color:#2A1040">Phone</label>
+              <input type="tel" id="mc-cust-phone" placeholder="(000) 000-0000" style="color:#2A1040;background:#fff">
             </div>
           </div>
-          <div class="form-group" style="margin-bottom:0.85rem">
-            <label>Email * <span style="font-weight:400;color:var(--text-light);text-transform:none;letter-spacing:0">(your invoice confirmation will be sent here)</span></label>
-            <input type="email" id="mc-cust-email" placeholder="your@email.com">
-          </div>
-          <!-- Save account toggle -->
-          <div style="display:flex;align-items:center;gap:10px;margin-bottom:1rem;padding:0.6rem 0.85rem;background:rgba(255,255,255,0.5);border-radius:10px;border:1px solid var(--purple-pale)">
-            <input type="checkbox" id="mc-save-acct" style="width:16px;height:16px;accent-color:var(--purple-mid);flex-shrink:0">
-            <label for="mc-save-acct" style="font-size:0.82rem;color:var(--text-mid);cursor:pointer;font-weight:600;text-transform:none;letter-spacing:0;display:block;margin:0">Save my info to track orders & invoices later</label>
-          </div>
-          <div id="mc-acct-pass-wrap" style="display:none;margin-bottom:0.85rem">
-            <div class="form-group" style="margin-bottom:0">
-              <label>Create a Password</label>
-              <input type="password" id="mc-cust-pass" placeholder="Choose a password">
-            </div>
+          <div class="form-group" style="margin-bottom:0">
+            <label style="color:#2A1040">Email * <span style="font-weight:400;color:#5A3880;font-size:0.78rem;text-transform:none;letter-spacing:0">(invoice confirmation sent here)</span></label>
+            <input type="email" id="mc-cust-email" placeholder="your@email.com" style="color:#2A1040;background:#fff">
           </div>
         </div>
         <div style="display:flex;gap:0.75rem;margin-top:1rem;flex-wrap:wrap">
           <button class="order-cat-tab" style="border-radius:20px;padding:0.5rem 1.25rem" onclick="goToStep('review')">← Edit Order</button>
           <button class="order-pay-btn" style="flex:1;margin-top:0" id="mc-submit-btn" onclick="mcSubmitOrder()">✅ Submit Order Request</button>
         </div>
-        <p style="text-align:center;color:var(--text-light);font-size:0.78rem;margin-top:0.75rem">No payment taken now — Cassandra will send your PayPal invoice after confirming.</p>
+        <p style="text-align:center;color:var(--text-light);font-size:0.78rem;margin-top:0.75rem">No payment taken now — Cassandra sends your PayPal invoice after confirming.</p>
       </div>
 
-      <!-- ── STEP B: Success confirmation (shown after submit) ── -->
+      <!-- Success screen -->
       <div id="mc-success-step" style="display:none">
-        <div style="text-align:center;padding:1.5rem 1rem;background:var(--purple-ghost);border-radius:16px;border:1.5px solid var(--purple-pale);margin-top:1rem">
+        <div style="text-align:center;padding:1.5rem 1rem;background:#f5f0ff;border-radius:16px;border:1.5px solid var(--purple-pale);margin-top:1rem">
           <div style="font-size:2.5rem;margin-bottom:0.5rem">🎉</div>
           <h3 style="font-family:'Dancing Script',cursive;color:var(--purple-dark);font-size:1.8rem;margin-bottom:0.25rem">Order Recorded!</h3>
           <div style="background:#fff;border-radius:10px;padding:0.75rem 1rem;margin:0.75rem 0;border:1px solid var(--purple-pale)">
             <div style="font-size:1rem;font-weight:800;color:var(--purple-dark)" id="mc-suc-inv"></div>
             <div style="font-size:1.3rem;font-weight:800;color:var(--pink-dark);margin-top:2px" id="mc-suc-total"></div>
           </div>
-          <div style="font-size:0.82rem;color:var(--text-light);line-height:1.7">
+          <div style="font-size:0.82rem;color:#5A3880;line-height:1.8">
             <div>✅ Confirmation sent to <strong id="mc-suc-email"></strong></div>
             <div>🔔 Cassandra notified at misscsweettreats@gmail.com</div>
           </div>
@@ -3696,20 +3817,16 @@ document.addEventListener('DOMContentLoaded', () => {
             <strong>No payment taken yet.</strong> Cassandra will review and send your PayPal invoice within 24 hours.
           </div>
         </div>
-
-        <!-- Invoice lookup built right in -->
-        <div style="margin-top:1rem;padding:1rem;background:rgba(255,255,255,0.6);border-radius:14px;border:1.5px solid var(--purple-pale)">
-          <p style="font-weight:800;color:var(--purple-dark);font-size:0.85rem;margin-bottom:0.5rem">🔍 Look Up Any Invoice</p>
+        <div style="margin-top:1rem;padding:1rem;background:#f5f0ff;border-radius:14px;border:1.5px solid var(--purple-pale)">
+          <p style="font-weight:800;color:#2A1040;font-size:0.85rem;margin-bottom:0.5rem">🔍 Look Up Any Invoice</p>
           <div style="display:flex;gap:0.5rem">
-            <input type="text" id="mc-lookup-input" placeholder="e.g. MC-860972" style="flex:1;background:rgba(255,255,255,0.15);border:1px solid rgba(255,255,255,0.3);border-radius:10px;color:var(--text-dark);font-family:'Nunito',sans-serif;font-size:0.9rem;padding:0.6rem 1rem;outline:none">
+            <input type="text" id="mc-lookup-input" placeholder="e.g. MC-860972" style="flex:1;background:#fff;border:1px solid var(--purple-pale);border-radius:10px;color:#2A1040;font-family:'Nunito',sans-serif;font-size:0.9rem;padding:0.6rem 1rem;outline:none">
             <button class="btn-primary" style="padding:0.6rem 1rem;font-size:0.8rem;border-radius:20px;white-space:nowrap" onclick="mcLookupInvoice()">Search</button>
           </div>
           <div id="mc-lookup-result" style="display:none;margin-top:0.75rem"></div>
         </div>
-
         <button class="order-pay-btn" style="margin-top:1rem" onclick="mcCloseAndReset()">Done — Close 🎂</button>
       </div>
-
     </div>
   </div>
 </div>
@@ -3887,9 +4004,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <div style="overflow-x:auto">
           <table class="order-table">
             <thead>
-              <tr>
-                <th>#</th><th>Invoice</th><th>Name</th><th>Phone</th><th>Email</th><th>Type</th><th>Date</th><th>Base</th><th>Tax</th><th>PP Fee</th><th>Total</th><th>Status</th><th>Actions</th>
-              </tr>
+              <tr><th>#</th><th>Invoice</th><th>Name</th><th>Phone</th><th>Email</th><th>Type</th><th>Date</th><th>Tax</th><th>Total</th><th>Status</th><th>Actions</th></tr>
             </thead>
             <tbody id="ordersTableBody"></tbody>
           </table>
